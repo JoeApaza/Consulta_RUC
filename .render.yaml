@@ -1,7 +1,0 @@
-services:
-  - type: web
-    name: flask-api
-    env: python
-    buildCommand: ""
-    startCommand: gunicorn app:app
-    autoDeploy: true
