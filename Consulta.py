@@ -1,20 +1,23 @@
 import requests
 
-# URL de la API (puede ser local o en producción, como Render)
-url = "http://127.0.0.1:5000/consultar_ruc"  # Cambia esto por tu URL en Render si ya la tienes desplegada
+# URL de la API que ya has desplegado en Render
+api_url = "https://consulta-ruc-87rm.onrender.com/consultar_ruc"
 
-# Parámetros de la solicitud (el RUC que quieres consultar)
+# Número de RUC que quieres consultar
+ruc = "20467534026"  # Reemplaza este valor por el RUC que quieras consultar
+
+# Parámetros de la solicitud GET
 params = {
-    'ruc': '20467534026'  # Reemplaza con el número de RUC que deseas consultar
+    'ruc': ruc
 }
 
 try:
-    # Realiza la solicitud GET a la API
-    response = requests.get(url, params=params)
+    # Realizar la solicitud GET a la API
+    response = requests.get(api_url, params=params)
 
-    # Verifica si la respuesta es exitosa (código 200)
+    # Verificar si la solicitud fue exitosa
     if response.status_code == 200:
-        # Muestra la respuesta en formato JSON
+        # Mostrar los datos de la API en formato JSON
         data = response.json()
         print("Datos del RUC consultado:")
         print(data)
