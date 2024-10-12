@@ -36,8 +36,8 @@ El objetivo es ofrecer una herramienta sencilla para obtener información detall
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/tu-usuario/consulta-ruc-sunat.git
-cd consulta-ruc-sunat
+git clone https://github.com/JoeApaza/Consulta_RUC.git
+cd Consulta_RUC
 ```
 
 ### 2. Crear un entorno virtual
@@ -46,7 +46,7 @@ Es recomendable utilizar un entorno virtual para gestionar las dependencias del 
 
 ```bash
 python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
+source venv/bin/activate  # En Windows: venv\Scriptsctivate
 ```
 
 ### 3. Instalar las dependencias
@@ -143,6 +143,83 @@ La API está diseñada para manejar los siguientes errores:
 
 - **RUC no válido**: Si el número de RUC no tiene el formato correcto, se devuelve un error.
 - **Error de scraping**: Si ocurre un error durante la consulta a la SUNAT, se captura y se devuelve un mensaje de error detallado.
+
+## Ejemplo de Uso - Script de Consulta de RUCs
+
+También puedes realizar consultas de varios RUCs utilizando el siguiente script:
+
+```python
+import requests
+import pandas as pd
+
+# Definir si estamos en el entorno local o de producción
+entorno_local = True  # Cambia esto a False cuando quieras apuntar a la API en Render
+
+# URL de la API que ya has desplegado en Render o en tu entorno local
+if entorno_local:
+    api_url = "http://127.0.0.1:5000/consultar_ruc"  # URL de la API en el entorno local
+else:
+    api_url = "https://consulta-ruc-87rm.onrender.com"  # URL de la API en Render
+
+# Lista de RUCs que quieres consultar
+lista_rucs = ["20106897914", "20467534026", "20467534026"]  # Reemplaza con los RUCs que desees consultar
+
+# Inicializar una lista vacía para almacenar los resultados
+resultados = []
+
+# Iterar sobre la lista de RUCs y realizar la consulta para cada uno
+for ruc in lista_rucs:
+    # Parámetros de la solicitud GET
+    params = {'ruc': ruc}
+
+    try:
+        # Realizar la solicitud GET a la API
+        response = requests.get(api_url, params=params)
+
+        # Verificar si la solicitud fue exitosa
+        if response.status_code == 200:
+            # Obtener los datos en formato JSON
+            data = response.json()
+            print(f"Datos del RUC {ruc}:")
+            print(data)
+            # Añadir los datos al listado de resultados
+            resultados.append(data)
+        else:
+            print(f"Error en la consulta del RUC {ruc}. Código de estado: {response.status_code}")
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error al realizar la solicitud para el RUC {ruc}: {e}")
+
+# Crear un DataFrame a partir de los resultados obtenidos
+if resultados:
+    df = pd.DataFrame(resultados)
+
+    # Reorganizar las columnas en el orden deseado
+    columnas_ordenadas = [
+        "Número de RUC",
+        "Razón Social",
+        "Tipo Contribuyente",
+        "Nombre Comercial",
+        "Fecha de Inscripción",
+        "Fecha de Inicio de Actividades",
+        "Estado del Contribuyente",
+        "Condición del Contribuyente",
+        "Domicilio Fiscal",
+        "Sistema Emisión de Comprobante",
+        "Actividad Comercio Exterior",
+        "Sistema Contabilidad",
+        "Actividad Principal"
+    ]
+
+    # Asegurarse de que todas las columnas existen antes de reordenarlas
+    df = df[columnas_ordenadas]
+
+    # Mostrar el DataFrame reorganizado
+    print("DataFrame con los resultados de los RUCs consultados en el orden correcto:")
+    display(df)
+else:
+    print("No se encontraron resultados para los RUCs consultados.")
+```
 
 ## Licencia
 
