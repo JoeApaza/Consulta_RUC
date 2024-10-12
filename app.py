@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from flask import Flask, jsonify, request, g
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from redis import Redis
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException, NoSuchElementException
@@ -20,6 +21,7 @@ from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+# Configuración de la aplicación Flask
 app = Flask(__name__)
 
 # Configuración básica del logging
@@ -37,10 +39,14 @@ else:
     )
 logger = logging.getLogger(__name__)
 
+# Configuración de Redis como almacenamiento para Flask-Limiter
+redis_store = Redis(host=os.getenv('REDIS_HOST', 'localhost'), port=os.getenv('REDIS_PORT', 6379))
+
 # Limitar el número de solicitudes por IP
 limiter = Limiter(
     get_remote_address,
     app=app,
+    storage_uri=f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', 6379)}",
     default_limits=["60 per minute"]
 )
 
@@ -60,11 +66,11 @@ REQUEST_LATENCY = Histogram(
 MAX_CONCURRENT_REQUESTS = int(os.getenv('MAX_CONCURRENT_REQUESTS', '5'))
 semaforo = threading.Semaphore(MAX_CONCURRENT_REQUESTS)
 
-# Implementación de un caché simple con TTL
+# Implementación de un caché simple con TTL (Time To Live)
 CACHE_TTL = int(os.getenv('CACHE_TTL', '300'))  # Tiempo en segundos
-MAX_CACHE_SIZE = int(os.getenv('MAX_CACHE_SIZE', '1000'))
+MAX_CACHE_SIZE = int(os.getenv('MAX_CACHE_SIZE', '1000'))  # Tamaño máximo del caché
 cache_ruc = {}
-cache_lock = threading.Lock()  # Para acceso seguro al caché en entornos concurrentes
+cache_lock = threading.Lock()  # Para asegurar el acceso seguro al caché en entornos concurrentes
 
 def limpiar_cache():
     """Limpia las entradas expiradas del caché periódicamente."""
@@ -291,6 +297,11 @@ def api_consultar_ruc():
         logger.error(f"Error al procesar la solicitud: {e}")
         return jsonify({"error": f"Error al procesar el RUC {ruc}: {str(e)}"}), 500
 
+# Endpoint raíz para evitar errores 404
+@app.route('/')
+def home():
+    return "API para consulta de RUC", 200
+
 @app.route('/metrics')
 def metrics():
     """
@@ -299,7 +310,9 @@ def metrics():
     return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
 
 if __name__ == '__main__':
+    # Iniciar el hilo de limpieza del caché
     hilo_cache = threading.Thread(target=limpiar_cache, daemon=True)
     hilo_cache.start()
 
+    # Ejecutar la aplicación Flask
     app.run(debug=False, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
