@@ -7,7 +7,7 @@ entorno_local = True  # Cambia esto a False cuando quieras apuntar a la API en R
 if entorno_local:
     api_url = "http://127.0.0.1:5000/consultar_ruc"  # URL de la API en el entorno local
 else:
-    #api_url = "https://consulta-ruc-87rm.onrender.com/consultar_ruc"  # URL de la API en Render
+    #api_url = "https://consulta-ruc-87rm.onrender.com"  # URL de la API en Render
     print("")
 # Número de RUC que quieres consultar
 ruc = "20100039207"  # Reemplaza este valor por el RUC que quieras consultar
