@@ -27,21 +27,25 @@ if os.getenv('FLASK_ENV') == 'production':
     logging.basicConfig(
         level=logging.WARNING,
         format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[logging.StreamHandler(sys.stdout)]
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
     )
 else:
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[logging.StreamHandler(sys.stdout)]
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
     )
 logger = logging.getLogger(__name__)
 
-# Limitar el número de solicitudes por IP
+# Limitar el número de solicitudes por IP para seguridad adicional
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["60 per minute"]
+    default_limits=["60 per minute"]  # Ajusta el límite según tus necesidades
 )
 
 # Monitoreo con Prometheus
@@ -60,18 +64,19 @@ REQUEST_LATENCY = Histogram(
 MAX_CONCURRENT_REQUESTS = int(os.getenv('MAX_CONCURRENT_REQUESTS', '5'))
 semaforo = threading.Semaphore(MAX_CONCURRENT_REQUESTS)
 
-# Implementación de un caché simple con TTL
-CACHE_TTL = int(os.getenv('CACHE_TTL', '300'))  # Tiempo en segundos
-MAX_CACHE_SIZE = int(os.getenv('MAX_CACHE_SIZE', '1000'))
+# Implementación de un caché simple con TTL (Time To Live)
+CACHE_TTL = int(os.getenv('CACHE_TTL', '300'))  # Tiempo en segundos que un resultado permanece en caché
+MAX_CACHE_SIZE = int(os.getenv('MAX_CACHE_SIZE', '1000'))  # Tamaño máximo del caché
 cache_ruc = {}
-cache_lock = threading.Lock()  # Para acceso seguro al caché en entornos concurrentes
+cache_lock = threading.Lock()  # Para asegurar el acceso seguro al caché en entornos concurrentes
 
 def limpiar_cache():
     """Limpia las entradas expiradas del caché periódicamente."""
     while True:
         time.sleep(CACHE_TTL)
         with cache_lock:
-            keys_a_eliminar = [key for key, value in cache_ruc.items() if datetime.now() - value['timestamp'] > timedelta(seconds=CACHE_TTL)]
+            keys_a_eliminar = [key for key, value in cache_ruc.items()
+                               if datetime.now() - value['timestamp'] > timedelta(seconds=CACHE_TTL)]
             for key in keys_a_eliminar:
                 del cache_ruc[key]
                 logger.info(f"Entrada de caché eliminada para el RUC: {key}")
@@ -89,10 +94,14 @@ def configurar_driver() -> webdriver.Firefox:
     firefox_options.add_argument("--disable-dev-shm-usage")
     firefox_options.add_argument("--disable-gpu")
     firefox_options.add_argument("--window-size=1920,1080")
+    # Agregar más opciones si es necesario
 
-    user_agent = os.getenv('USER_AGENT', "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Firefox/92.0")
+    user_agent = os.getenv('USER_AGENT', "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                         "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                         "Firefox/92.0")
     firefox_options.set_preference("general.useragent.override", user_agent)
 
+    # Inicializar el servicio de Firefox
     firefox_service = FirefoxService()
 
     try:
@@ -107,6 +116,13 @@ def configurar_driver() -> webdriver.Firefox:
 def validar_ruc(ruc: str) -> bool:
     """
     Valida que el RUC tenga el formato correcto.
+    Un RUC válido en Perú tiene 11 dígitos numéricos y cumple con un algoritmo de verificación.
+
+    Args:
+        ruc (str): Número de RUC a validar.
+
+    Returns:
+        bool: True si el RUC es válido, False en caso contrario.
     """
     if not re.match(r'^\d{11}$', ruc):
         return False
@@ -126,15 +142,25 @@ def validar_ruc(ruc: str) -> bool:
 def consultar_ruc(ruc: str) -> Dict[str, Any]:
     """
     Realiza la consulta de un RUC en la página de SUNAT y devuelve los datos obtenidos.
+    Implementa un sistema de caché para evitar consultas repetidas al mismo RUC.
+
+    Args:
+        ruc (str): Número de RUC a consultar.
+
+    Returns:
+        Dict[str, Any]: Datos obtenidos o mensaje de error.
     """
     logger.info(f"Iniciando consulta para el RUC: {ruc}")
 
+    # Validar el RUC antes de procesarlo
     if not validar_ruc(ruc):
         logger.warning(f"El RUC proporcionado no es válido: {ruc}")
         return {"error": f"El RUC proporcionado no es válido: {ruc}"}
 
+    # Sanitizar la entrada (aunque en este caso solo son dígitos)
     ruc = re.sub(r'\D', '', ruc)
 
+    # Verificar si el RUC está en caché y no ha expirado
     with cache_lock:
         if ruc in cache_ruc:
             cache_entry = cache_ruc[ruc]
@@ -142,9 +168,11 @@ def consultar_ruc(ruc: str) -> Dict[str, Any]:
                 logger.info(f"Resultado obtenido del caché para el RUC: {ruc}")
                 return cache_entry['data']
             else:
+                # Eliminar entrada de caché expirada
                 del cache_ruc[ruc]
                 logger.info(f"Entrada de caché expirada eliminada para el RUC: {ruc}")
 
+    # Adquirir el semáforo para limitar concurrencia
     logger.info("Esperando disponibilidad para iniciar una nueva sesión de Selenium...")
     with semaforo:
         logger.info("Semáforo adquirido. Iniciando nueva sesión de Selenium.")
@@ -157,6 +185,7 @@ def consultar_ruc(ruc: str) -> Dict[str, Any]:
             logger.info(f"Accediendo a la URL: {url}")
             driver.get(url)
 
+            # Esperar a que el campo de búsqueda esté presente
             input_element = WebDriverWait(driver, 20).until(
                 EC.presence_of_element_located((By.NAME, "search1"))
             )
@@ -164,12 +193,14 @@ def consultar_ruc(ruc: str) -> Dict[str, Any]:
             input_element.send_keys(ruc)
             logger.info("Número de RUC ingresado en el campo de búsqueda.")
 
+            # Esperar a que el botón de búsqueda esté clickeable
             boton_buscar = WebDriverWait(driver, 20).until(
                 EC.element_to_be_clickable((By.ID, "btnAceptar"))
             )
             boton_buscar.click()
             logger.info("Botón de búsqueda clickeado.")
 
+            # Esperar a que los resultados estén presentes
             WebDriverWait(driver, 20).until(
                 EC.presence_of_element_located((By.CLASS_NAME, "list-group"))
             )
@@ -178,6 +209,7 @@ def consultar_ruc(ruc: str) -> Dict[str, Any]:
             html = driver.page_source
             soup = BeautifulSoup(html, 'html.parser')
 
+            # Extracción de información
             ruc_y_razon_social_element = soup.find('h4', string=re.compile("Número de RUC:"))
             if ruc_y_razon_social_element:
                 ruc_y_razon_social = ruc_y_razon_social_element.find_next('h4').text.strip()
@@ -195,6 +227,7 @@ def consultar_ruc(ruc: str) -> Dict[str, Any]:
                         return next_element.text.strip()
                 return ""
 
+            # Extracción de datos
             tipo_contribuyente = get_info("Tipo Contribuyente:")
             nombre_comercial = get_info("Nombre Comercial:")
             fecha_inscripcion = get_info("Fecha de Inscripción:")
@@ -207,6 +240,7 @@ def consultar_ruc(ruc: str) -> Dict[str, Any]:
             actividad_comercio_exterior = get_info("Actividad Comercio Exterior:")
             sistema_contabilidad = get_info("Sistema Contabilidad:")
 
+            # Actividad económica principal
             actividades_economicas_element = soup.find('h4', string=re.compile("Actividad\(es\) Económica\(s\):"))
             actividad_principal = ""
             if actividades_economicas_element:
@@ -235,6 +269,7 @@ def consultar_ruc(ruc: str) -> Dict[str, Any]:
 
             logger.info("Extracción de datos completada exitosamente.")
 
+            # Almacenar en caché con límite de tamaño
             with cache_lock:
                 if len(cache_ruc) >= MAX_CACHE_SIZE:
                     oldest_ruc = min(cache_ruc.items(), key=lambda x: x[1]['timestamp'])[0]
@@ -276,6 +311,9 @@ def record_metrics(response):
 def api_consultar_ruc():
     """
     Endpoint para consultar información de un RUC específico.
+
+    Returns:
+        JSON: Datos del RUC consultado o mensaje de error.
     """
     ruc = request.args.get('ruc', None)
     if not ruc:
@@ -284,6 +322,7 @@ def api_consultar_ruc():
 
     try:
         resultado = consultar_ruc(ruc)
+        # Manejar errores específicos
         if 'error' in resultado:
             return jsonify(resultado), 400
         return jsonify(resultado), 200
@@ -295,11 +334,17 @@ def api_consultar_ruc():
 def metrics():
     """
     Endpoint para exponer métricas de Prometheus.
+
+    Returns:
+        Response: Métricas en formato Prometheus.
     """
     return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
 
 if __name__ == '__main__':
+    # Iniciar el hilo de limpieza del caché
     hilo_cache = threading.Thread(target=limpiar_cache, daemon=True)
     hilo_cache.start()
 
+    # Ejecutar la aplicación Flask
     app.run(debug=False, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+
