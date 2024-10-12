@@ -221,10 +221,6 @@ else:
     print("No se encontraron resultados para los RUCs consultados.")
 ```
 
-## Licencia
-
-Este proyecto está bajo la licencia MIT. Puedes leer más en el archivo [LICENSE](LICENSE).
-
 ## Contacto
 
 Si tienes alguna pregunta o sugerencia, siéntete libre de crear un [issue](https://github.com/JoeApaza/Consulta_RUC/issues) en el repositorio o contactarme directamente en:
