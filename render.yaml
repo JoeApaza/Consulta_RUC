@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: consulta-ruc-api
+    env: python
+    runtime: python3
+    buildCommand: |
+      apt-get update && \
+      apt-get install -y firefox-esr && \
+      wget -q https://github.com/mozilla/geckodriver/releases/latest/download/geckodriver-v0.33.0-linux64.tar.gz && \
+      tar -xzf geckodriver-v0.33.0-linux64.tar.gz -C /usr/local/bin && \
+      pip install -r requirements.txt
+    startCommand: gunicorn app:app
